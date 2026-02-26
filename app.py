@@ -38,34 +38,38 @@ def get_gdrive_service():
     creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
     creds = service_account.Credentials.from_service_account_info(
         creds_dict,
-        scopes=["https://www.googleapis.com/auth/drive.file"]
+        scopes=["https://www.googleapis.com/auth/drive"]
     )
     return build("drive", "v3", credentials=creds)
 
 def upload_to_gdrive(file_bytes: bytes, filename: str, mime_type: str) -> str:
-    """Upload file to Google Drive and return shareable link."""
+    """Upload file to Google Drive folder and return shareable link."""
     service = get_gdrive_service()
-    
-    file_metadata = {"name": filename}
-    if GDRIVE_FOLDER_ID:
-        file_metadata["parents"] = [GDRIVE_FOLDER_ID]
+
+    # ต้องระบุ parents เสมอ เพื่อให้ไฟล์อยู่ใน quota ของเจ้าของโฟลเดอร์
+    file_metadata = {
+        "name": filename,
+        "parents": [GDRIVE_FOLDER_ID]
+    }
 
     media = MediaIoBaseUpload(
         io.BytesIO(file_bytes),
         mimetype=mime_type,
         resumable=True
     )
-    
+
     uploaded = service.files().create(
         body=file_metadata,
         media_body=media,
-        fields="id, webViewLink"
+        fields="id, webViewLink",
+        supportsAllDrives=True
     ).execute()
 
     # Make it accessible to anyone with link
     service.permissions().create(
         fileId=uploaded["id"],
-        body={"role": "reader", "type": "anyone"}
+        body={"role": "reader", "type": "anyone"},
+        supportsAllDrives=True
     ).execute()
 
     return uploaded.get("webViewLink", "")
